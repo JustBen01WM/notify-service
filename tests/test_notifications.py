@@ -78,6 +78,12 @@ def test_template_is_filled_in(client, user):
 def test_live_websocket_receives_notification(client, user):
     with client.websocket_connect("/ws") as ws:
         notify(client, user["id"], content="live one")
-        msg = ws.receive_json()
-        assert msg["content"] == "live one"
-        assert msg["status"] == "sent"
+        # The page may first see "queued" and then "sent", so read updates until "sent" arrives.
+        statuses = []
+        for _ in range(5):
+            msg = ws.receive_json()
+            assert msg["content"] == "live one"
+            statuses.append(msg["status"])
+            if msg["status"] == "sent":
+                break
+        assert statuses[-1] == "sent"
