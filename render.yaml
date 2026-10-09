@@ -1,0 +1,32 @@
+# Render "Blueprint": deploys the website, the background worker, Postgres and Redis.
+# Render dashboard -> New -> Blueprint -> pick your GitHub repo.
+services:
+  - type: web
+    name: notify-api
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    preDeployCommand: alembic upgrade head
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars: &shared
+      - key: DATABASE_URL
+        fromDatabase: {name: notify-db, property: connectionString}
+      - key: REDIS_URL
+        fromService: {type: keyvalue, name: notify-redis, property: connectionString}
+      - key: EMAIL_PROVIDER
+        value: mock          # change to "resend" and add RESEND_API_KEY for real emails
+  - type: worker
+    name: notify-worker
+    runtime: python
+    plan: starter            # Render's background workers are not free; see README
+    buildCommand: pip install -r requirements.txt
+    startCommand: python -m huey.bin.huey_consumer app.tasks.huey -w 2
+    envVars: *shared
+  - type: keyvalue
+    name: notify-redis
+    plan: free
+    ipAllowList: []
+databases:
+  - name: notify-db
+    plan: free

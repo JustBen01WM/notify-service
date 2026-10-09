@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Notification Service</title>
+<style>
+  :root {
+    --bg: #f5f6f4; --panel: #ffffff; --ink: #1d2a2e; --muted: #66767b; --line: #d9dfdc;
+    --accent: #1f6f6b; --ok: #1d7a46; --warn: #a66a00; --bad: #b3261e;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #14191b; --panel: #1c2326; --ink: #e6ecea; --muted: #94a3a6; --line: #2f3b3f;
+            --accent: #5cc0b8; --ok: #5fd08a; --warn: #e3a948; --bad: #ff8a80; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 16px/1.5 "Segoe UI", system-ui, sans-serif; }
+  header { padding: 20px 24px; border-bottom: 1px solid var(--line); display: flex;
+           align-items: baseline; gap: 16px; flex-wrap: wrap; }
+  h1 { margin: 0; font-size: 1.25rem; }
+  #conn { font-size: .875rem; color: var(--muted); }
+  #conn.on { color: var(--ok); }
+  main { display: grid; grid-template-columns: minmax(280px, 380px) 1fr; gap: 24px;
+         padding: 24px; max-width: 1100px; margin: 0 auto; }
+  @media (max-width: 760px) { main { grid-template-columns: 1fr; } }
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 16px; }
+  h2 { margin: 0 0 12px; font-size: 1rem; }
+  label { display: block; font-size: .875rem; color: var(--muted); margin: 10px 0 4px; }
+  input, select, textarea, button { font: inherit; width: 100%; padding: 8px 10px; color: var(--ink);
+         background: var(--bg); border: 1px solid var(--line); border-radius: 6px; }
+  textarea { min-height: 80px; resize: vertical; }
+  button { background: var(--accent); color: #fff; border-color: var(--accent); cursor: pointer;
+           margin-top: 12px; font-weight: 600; }
+  @media (prefers-color-scheme: dark) { button { color: #0c1213; } }
+  button:hover { filter: brightness(1.08); }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .msg { font-size: .875rem; margin-top: 8px; min-height: 1.3em; }
+  .msg.err { color: var(--bad); }
+  hr { border: 0; border-top: 1px solid var(--line); margin: 20px 0; }
+  ul { list-style: none; margin: 0; padding: 0; }
+  li { border-top: 1px solid var(--line); padding: 10px 0; display: grid;
+       grid-template-columns: auto 1fr auto; gap: 4px 12px; align-items: baseline; }
+  li:first-child { border-top: 0; }
+  li.fresh { animation: flash 1.2s ease-out; }
+  @keyframes flash { from { background: color-mix(in srgb, var(--accent) 22%, transparent); } }
+  @media (prefers-reduced-motion: reduce) { li.fresh { animation: none; } }
+  .id { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .text { overflow-wrap: anywhere; }
+  .meta { grid-column: 2 / 4; font-size: .8125rem; color: var(--muted); }
+  .status { font-weight: 600; font-size: .875rem; }
+  .queued { color: var(--warn); } .sent { color: var(--ok); } .failed { color: var(--bad); }
+  .empty { color: var(--muted); padding: 8px 0; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Notification Service</h1>
+  <span id="conn">Connecting…</span>
+</header>
+<main>
+  <div>
+    <section>
+      <h2>Add a user</h2>
+      <label for="u-email">Email</label>
+      <input id="u-email" type="email" placeholder="ada@example.com">
+      <label for="u-phone">Phone (optional)</label>
+      <input id="u-phone" type="tel" placeholder="+234…">
+      <button id="add-user">Add user</button>
+      <div class="msg" id="user-msg" role="status"></div>
+      <hr>
+      <h2>Send a notification</h2>
+      <label for="n-user">User</label>
+      <select id="n-user"></select>
+      <label for="n-type">Type</label>
+      <select id="n-type"><option value="email">Email</option><option value="sms">SMS</option></select>
+      <label for="n-subject">Subject (email only)</label>
+      <input id="n-subject" placeholder="Hello">
+      <label for="n-content">Message</label>
+      <textarea id="n-content" placeholder="Write your message. Include the word FAIL to see a failed delivery."></textarea>
+      <button id="send">Send notification</button>
+      <div class="msg" id="send-msg" role="status"></div>
+    </section>
+  </div>
+  <section>
+    <h2>Live notifications</h2>
+    <ul id="feed"></ul>
+    <div class="empty" id="empty">Nothing yet. Add a user, then send a notification. It will appear here without a refresh.</div>
+  </section>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+const rows = new Map();
+
+async function api(path, body) {
+  const res = await fetch(path, body ? { method: "POST", headers: { "Content-Type": "application/json" },
+                                          body: JSON.stringify(body) } : undefined);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const d = data.detail;
+    throw new Error(typeof d === "string" ? d : "Please check your input.");
+  }
+  return data;
+}
+function say(el, text, isErr) { el.textContent = text; el.className = "msg" + (isErr ? " err" : ""); }
+
+async function loadUsers() {
+  const users = await api("/api/v1/users");
+  $("n-user").replaceChildren(...users.map(u => new Option(u.email, u.id)));
+}
+
+$("add-user").onclick = async () => {
+  try {
+    const u = await api("/api/v1/users", { email: $("u-email").value, phone: $("u-phone").value || null });
+    say($("user-msg"), `Added ${u.email}`); $("u-email").value = ""; $("u-phone").value = "";
+    await loadUsers(); $("n-user").value = u.id;
+  } catch (e) { say($("user-msg"), e.message, true); }
+};
+
+$("send").onclick = async () => {
+  try {
+    const r = await api("/api/v1/notify", { user_id: Number($("n-user").value), type: $("n-type").value,
+      subject: $("n-subject").value || null, content: $("n-content").value });
+    say($("send-msg"), `Queued as #${r.notification_id}`);
+  } catch (e) { say($("send-msg"), e.message, true); }
+};
+
+function render(n) {
+  $("empty").hidden = true;
+  let li = rows.get(n.id);
+  if (!li) { li = document.createElement("li"); rows.set(n.id, li); $("feed").prepend(li); }
+  li.className = "fresh";
+  li.innerHTML = `<span class="id">#${n.id}</span><span class="text"></span><span class="status ${n.status}">${n.status}</span>
+                  <span class="meta"></span>`;
+  li.querySelector(".text").textContent = n.content;
+  li.querySelector(".meta").textContent = `${n.type} to user ${n.user_id}` + (n.error ? ` | ${n.error}` : "");
+}
+
+function connect() {
+  const ws = new WebSocket((location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/ws");
+  ws.onopen = () => { $("conn").textContent = "Live"; $("conn").className = "on"; };
+  ws.onmessage = (e) => render(JSON.parse(e.data));
+  ws.onclose = () => { $("conn").textContent = "Reconnecting…"; $("conn").className = ""; setTimeout(connect, 2000); };
+}
+loadUsers(); connect();
+</script>
+</body>
+</html>
