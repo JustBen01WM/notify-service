@@ -5,3 +5,7 @@ __pycache__/
 *.db-journal
 .env
 .pytest_cache/
+.app_profile/
+logs/
+settings.json
+settings.tmp

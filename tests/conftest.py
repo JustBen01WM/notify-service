@@ -8,6 +8,7 @@ os.environ["QUEUE_FILE"] = f"{_tmp}/queue.db"
 os.environ["QUEUE_IMMEDIATE"] = "1"  # run background tasks instantly inside tests
 os.environ["EMAIL_PROVIDER"] = "mock"
 os.environ["RATE_LIMIT_MAX"] = "5"
+os.environ["SETTINGS_FILE"] = f"{_tmp}/settings.json"
 
 import pytest
 from fastapi.testclient import TestClient
@@ -18,6 +19,8 @@ from app.main import app
 
 @pytest.fixture(autouse=True)
 def fresh_database():
+    if os.path.exists(os.environ["SETTINGS_FILE"]):
+        os.remove(os.environ["SETTINGS_FILE"])
     Base.metadata.drop_all(engine)
     Base.metadata.create_all(engine)
     yield

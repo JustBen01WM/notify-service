@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="WM Notifier">
+  <rect width="512" height="512" rx="112" fill="#12213a"/>
+  <polygon points="120,330 410,118 430,160 196,350" fill="#f2a900"/>
+  <polygon points="120,392 352,214 368,254 188,408" fill="#f7c548"/>
+  <polygon points="120,454 292,320 306,360 180,466" fill="#ffe08a"/>
+</svg>

@@ -23,3 +23,13 @@ class NotifyRequest(BaseModel):
     # ...or use a saved template, e.g. {"template_name": "welcome", "variables": {"name": "Ada"}}
     template_name: str | None = None
     variables: dict[str, str] = {}
+
+
+class SettingsUpdate(BaseModel):
+    api_key: str | None = Field(default=None, max_length=300)  # "" clears the key
+    from_email: str | None = Field(default=None, max_length=255)
+    use_real: bool | None = None
+
+
+class TestEmail(BaseModel):
+    to: EmailStr
